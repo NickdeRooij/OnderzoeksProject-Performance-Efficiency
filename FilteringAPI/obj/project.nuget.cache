@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "bd7kjF247+M=",
+  "success": true,
+  "projectFilePath": "C:\\Avans\\Leerjaar-2-2025-2026\\Periode 3\\OnderzoeksProject\\OnderzoeksProject-Performance-Efficiency\\FilteringAPI\\FilteringAPI.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\npbde\\.nuget\\packages\\microsoft.aspnetcore.openapi\\9.0.1\\microsoft.aspnetcore.openapi.9.0.1.nupkg.sha512",
+    "C:\\Users\\npbde\\.nuget\\packages\\microsoft.openapi\\1.6.17\\microsoft.openapi.1.6.17.nupkg.sha512"
+  ],
+  "logs": []
+}

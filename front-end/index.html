@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Filtering Dashboard</title>
+</head>
+
+<body>
+    <nav class="navbar navbar-dark bg-dark mb-4">
+        <div class="container-fluid">
+
+            <span class="navbar-brand mb-0 h1">
+                Filtering Performance Dashboard
+            </span>
+
+            <div>
+                <a class="btn btn-outline-light btn-sm me-2" href="home.html">Home</a>
+                <a class="btn btn-outline-light btn-sm me-2" href="index.html">Dashboard</a>
+                <a class="btn btn-outline-light btn-sm" href="about.html">About</a>
+            </div>
+
+        </div>
+    </nav>
+    <div class="container">
+        <div class="btn-group mb-3">
+            <button id="clientBtn" class="btn btn-primary">Client-side</button>
+            <button id="serverBtn" class="btn btn-outline-primary">Server-side</button>
+        </div>
+
+        <div class="row mb-3">
+
+            <div class="col-md-2">
+                <label class="form-label">Dataset</label>
+                <select class="form-select" id="datasetSize">
+                    <option value="small">1.000</option>
+                    <option value="medium">10.000</option>
+                    <option value="large">100.000</option>
+                    <option value="xlarge">1.000.000</option>
+                </select>
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Artist</label>
+                <input class="form-control" id="artist">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Genre</label>
+                <input class="form-control" id="genre">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Min BPM</label>
+                <input class="form-control" type="number" id="minBPM">
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label">Max BPM</label>
+                <input class="form-control" type="number" id="maxBPM">
+            </div>
+
+            <div class="col-md-2 d-flex align-items-end">
+                <button class="btn btn-success w-100" onclick="filter()">Filter</button>
+            </div>
+
+            <button class="btn btn-warning w-100 mt-2" onclick="runBenchmark(10)">
+                Benchmark (10 runs)
+            </button>
+
+            <p>Filtering time: <span id="time">0</span> ms</p>
+        </div>
+        <!-- <p>Showing first 100 results</p> -->
+        <table class="table table-striped table-hover" id="dataTable">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Artist</th>
+                    <th>Title</th>
+                    <th>Genre</th>
+                    <th>BPM</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="5">Loading dataset...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    </div>
+
+    <script>
+        let clientDataset = [];
+        let mode = "client";
+
+        document.getElementById("clientBtn").onclick = () => {
+            mode = "client";
+            document.getElementById("clientBtn").classList.add("btn-primary");
+            document.getElementById("clientBtn").classList.remove("btn-outline-primary");
+
+            document.getElementById("serverBtn").classList.add("btn-outline-primary");
+            document.getElementById("serverBtn").classList.remove("btn-primary");
+
+            loadData();
+        };
+
+        document.getElementById("serverBtn").onclick = () => {
+            mode = "server";
+            document.getElementById("serverBtn").classList.add("btn-primary");
+            document.getElementById("serverBtn").classList.remove("btn-outline-primary");
+
+            document.getElementById("clientBtn").classList.add("btn-outline-primary");
+            document.getElementById("clientBtn").classList.remove("btn-primary");
+
+            loadData();
+        };
+
+        async function loadData() {
+
+            const size = document.getElementById('datasetSize').value;
+
+            console.log("---- DATASET LOAD START ----");
+            console.log("Mode:", mode);
+            console.log("Dataset size:", size);
+
+            if (mode === "server") {
+                console.log("Server mode actief → dataset wordt niet vooraf geladen");
+                renderTable([]);
+                return;
+            }
+
+            const start = performance.now();
+
+            const res = await fetch(`http://localhost:5206/dataset/client/${size}`);
+            clientDataset = await res.json();
+
+            const end = performance.now();
+
+            console.log("Dataset geladen");
+            console.log("Aantal records:", clientDataset.length);
+            console.log("Laadtijd:", (end - start).toFixed(2), "ms");
+
+            renderTable(clientDataset.slice(0, 100));
+
+            console.log("---- DATASET LOAD END ----");
+        }
+
+        async function runBenchmark(runs = 10) {
+
+            console.log("===== BENCHMARK START =====");
+
+            const results = [];
+
+            for (let i = 0; i < runs; i++) {
+
+                const start = performance.now();
+
+                await filter(); // je bestaande filter functie
+
+                const end = performance.now();
+
+                const time = end - start;
+
+                results.push(time);
+
+                console.log(`Run ${i + 1}: ${time.toFixed(2)} ms`);
+            }
+
+            const avg = results.reduce((a, b) => a + b) / results.length;
+
+            console.log("===== BENCHMARK RESULT =====");
+            console.log("Runs:", runs);
+            console.log("Average:", avg.toFixed(2), "ms");
+
+        }
+
+        async function filter() {
+
+            const start = performance.now();
+
+            const size = document.getElementById('datasetSize').value;
+            const artist = document.getElementById('artist').value;
+            const genre = document.getElementById('genre').value;
+            const minBPM = document.getElementById('minBPM').value;
+            const maxBPM = document.getElementById('maxBPM').value;
+
+            console.log("---- FILTER START ----");
+            console.log("Mode:", mode);
+            console.log("Dataset:", size);
+            console.log("Filters:", {
+                artist,
+                genre,
+                minBPM,
+                maxBPM
+            });
+
+            let result = [];
+
+            if (mode === "server") {
+
+                let url = `http://localhost:5206/dataset/server/${size}?`;
+
+                if (artist) url += `artist=${artist}&`;
+                if (genre) url += `genre=${genre}&`;
+                if (minBPM) url += `minBPM=${minBPM}&`;
+                if (maxBPM) url += `maxBPM=${maxBPM}&`;
+
+                console.log("Server request:", url);
+
+                const res = await fetch(url);
+                result = await res.json();
+
+            } else {
+
+                result = clientDataset.filter(track =>
+                    (!artist || track.artist.toLowerCase().includes(artist.toLowerCase())) &&
+                    (!genre || track.genre.toLowerCase().includes(genre.toLowerCase())) &&
+                    (!minBPM || track.bpm >= parseInt(minBPM)) &&
+                    (!maxBPM || track.bpm <= parseInt(maxBPM))
+                );
+
+            }
+
+            const end = performance.now();
+
+            console.log("Resultaten gevonden:", result.length);
+            console.log("Filtering time:", (end - start).toFixed(2), "ms");
+            console.log("---- FILTER END ----");
+
+            document.getElementById("time").textContent = (end - start).toFixed(2);
+
+            renderTable(result.slice(0, 100));
+        }
+
+        function renderTable(data) {
+            const tbody = document.querySelector('#dataTable tbody');
+
+            let html = '';
+
+            data.forEach(track => {
+                html += `
+        <tr>
+            <td>${track.id}</td>
+            <td>${track.artist}</td>
+            <td>${track.title}</td>
+            <td>${track.genre}</td>
+            <td>${track.bpm}</td>
+        </tr>`;
+            });
+
+            tbody.innerHTML = html;
+        }
+
+        // Event listeners
+        document.getElementById('datasetSize').addEventListener('change', loadData);
+
+        loadData(); // initial load
+
+    </script>
+</body>
+
+</html>
