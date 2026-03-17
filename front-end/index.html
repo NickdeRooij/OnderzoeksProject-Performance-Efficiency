@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <title>Filtering Dashboard</title>
 </head>
 
@@ -90,12 +91,22 @@
                 </tr>
             </tbody>
         </table>
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+
+                <h5 class="card-title">Performance Chart</h5>
+
+                <canvas id="performanceChart" height="100"></canvas>
+
+            </div>
+        </div>
     </div>
     </div>
 
     <script>
         let clientDataset = [];
         let mode = "client";
+        let chart;
 
         document.getElementById("clientBtn").onclick = () => {
             mode = "client";
@@ -226,14 +237,66 @@
             }
 
             const end = performance.now();
+            const time = (end - start);
 
             console.log("Resultaten gevonden:", result.length);
-            console.log("Filtering time:", (end - start).toFixed(2), "ms");
+            console.log("Filtering time:", time.toFixed(2), "ms");
             console.log("---- FILTER END ----");
 
-            document.getElementById("time").textContent = (end - start).toFixed(2);
+            document.getElementById("time").textContent = time.toFixed(2);
+            const dataset = document.getElementById('datasetSize').value;
+            addDataToChart(dataset, time, mode);
 
             renderTable(result.slice(0, 100));
+        }
+
+        function addDataToChart(datasetSize, time, mode) {
+
+            // label toevoegen als die nog niet bestaat
+            if (!chart.data.labels.includes(datasetSize)) {
+                chart.data.labels.push(datasetSize);
+            }
+
+            const index = chart.data.labels.indexOf(datasetSize);
+
+            if (mode === "client") {
+                chart.data.datasets[0].data[index] = time;
+            } else {
+                chart.data.datasets[1].data[index] = time;
+            }
+
+            chart.update();
+        }
+
+        function initChart() {
+            const ctx = document.getElementById("performanceChart");
+
+            chart = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: "Client-side",
+                            data: [],
+                            tension: 0.3,
+                        },
+                        {
+                            label: "Server-side",
+                            data: [],
+                            tension: 0.3,
+                        },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                        },
+                    },
+                },
+            });
         }
 
         function renderTable(data) {
@@ -258,7 +321,10 @@
         // Event listeners
         document.getElementById('datasetSize').addEventListener('change', loadData);
 
-        loadData(); // initial load
+        window.onload = () => {
+            initChart();
+            loadData();
+        };
 
     </script>
 </body>

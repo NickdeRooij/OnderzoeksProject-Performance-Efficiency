@@ -5,7 +5,7 @@ namespace FilteringAPI.Services;
 public class DatasetService
 {
     private readonly string[] artists = { "DJ Nick", "Avicii", "Garrix", "Guetta", "Alesso", "Calvin Harris", "Tiësto", "Hardwell", "Afrojack", "Zedd", "Kygo", "Marshmello", "Diplo", "Skrillex", "Martin Solveig", "Swedish House Mafia", "John Summit", "Fisher", "Chris Lake", "Claptone", "Solardo", "Green Velvet", };
-    private readonly string[] genres = { "House", "Techno", "Afro", "Trance", "Pop", "Hip-Hop", "R&B", "Rock", "Jazz", "Classical", "Afro House", "Tech House", "Deep House", "Progressive House", "Electro House", "Future House", "Bass House", "G-House", "Melodic Techno", "Minimal Techno" };
+    private readonly string[] genres = { "House", "Techno", "Afro", "Trance", "Pop", "Hip-Hop", "R&B", "Rock", "Jazz", "Afro House", "Tech House", "Deep House", "Progressive House", "Electro House", "Future House", "Bass House", "Melodic Techno", "Minimal Techno", "Psytrance", "Hardstyle", "Dubstep", "Drum and Bass" };
 
     public List<Track> GenerateDataset(int size)
     {
