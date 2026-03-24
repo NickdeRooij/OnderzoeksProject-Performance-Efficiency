@@ -53,10 +53,12 @@ app.MapGet("/dataset/server/{size}", (string size, string? artist, string? genre
     var query = datasets[size.ToLower()].AsQueryable();
 
     if (!string.IsNullOrEmpty(artist))
-        query = query.Where(t => t.Artist.Equals(artist, StringComparison.OrdinalIgnoreCase));
+        query = query.Where(t =>
+        t.Artist.Contains(artist, StringComparison.OrdinalIgnoreCase));
 
     if (!string.IsNullOrEmpty(genre))
-        query = query.Where(t => t.Genre.Equals(genre, StringComparison.OrdinalIgnoreCase));
+        query = query.Where(t =>
+            t.Genre.Contains(genre, StringComparison.OrdinalIgnoreCase));
 
     if (minBPM.HasValue)
         query = query.Where(t => t.BPM >= minBPM.Value);

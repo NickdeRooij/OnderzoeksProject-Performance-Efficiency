@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="style.css">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <title>Filtering Dashboard</title>
 </head>
@@ -75,22 +76,28 @@
             <p>Filtering time: <span id="time">0</span> ms</p>
         </div>
         <!-- <p>Showing first 100 results</p> -->
-        <table class="table table-striped table-hover" id="dataTable">
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Artist</th>
-                    <th>Title</th>
-                    <th>Genre</th>
-                    <th>BPM</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td colspan="5">Loading dataset...</td>
-                </tr>
-            </tbody>
-        </table>
+        <button class="btn btn-secondary mb-3" data-bs-toggle="collapse" data-bs-target="#datasetTable">
+            Toon / Verberg Dataset
+        </button>
+        <div id="datasetTable" class="collapse show">
+
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Artist</th>
+                        <th>Track</th>
+                        <th>Genre</th>
+                        <th>BPM</th>
+                    </tr>
+                </thead>
+
+                <tbody id="resultsTable">
+                </tbody>
+
+            </table>
+
+        </div>
         <div class="card shadow-sm mb-4">
             <div class="card-body">
 
@@ -100,6 +107,20 @@
 
             </div>
         </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Payload Chart</h5>
+                <canvas id="payloadChart" height="100"></canvas>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">Memory Usage</h5>
+                <canvas id="memoryChart"></canvas>
+            </div>
+        </div>
     </div>
     </div>
 
@@ -107,6 +128,45 @@
         let clientDataset = [];
         let mode = "client";
         let chart;
+        let payloadChart;
+
+        let memoryChart = new Chart(document.getElementById('memoryChart'), {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: "Client memory (MB)",
+                        data: [],
+                        borderColor: "green",
+                        tension: 0.1
+                    },
+                    {
+                        label: "Server memory (MB)",
+                        data: [],
+                        borderColor: "red",
+                        tension: 0.1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: "Memory usage (MB)"
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: "Dataset size"
+                        }
+                    }
+                }
+            }
+        });
 
         document.getElementById("clientBtn").onclick = () => {
             mode = "client";
@@ -147,7 +207,13 @@
             const start = performance.now();
 
             const res = await fetch(`http://localhost:5206/dataset/client/${size}`);
-            clientDataset = await res.json();
+            const text = await res.text();
+
+            clientPayloadKB = new Blob([text]).size / 1024;
+
+            clientDataset = JSON.parse(text);
+
+            console.log("Client payload:", clientPayloadKB.toFixed(2), "KB");
 
             const end = performance.now();
 
@@ -210,6 +276,14 @@
             });
 
             let result = [];
+            let clientPayloadKB = 0;
+            let payload = 0;
+            let sizeKB = 0;
+            let memoryUsed = 0;
+
+            if (performance.memory) {
+                memoryUsed = performance.memory.usedJSHeapSize / 1024 / 1024;
+            }
 
             if (mode === "server") {
 
@@ -223,7 +297,11 @@
                 console.log("Server request:", url);
 
                 const res = await fetch(url);
-                result = await res.json();
+                const text = await res.text();
+
+                sizeKB = new Blob([text]).size / 1024;
+
+                result = JSON.parse(text);
 
             } else {
 
@@ -245,62 +323,151 @@
 
             document.getElementById("time").textContent = time.toFixed(2);
             const dataset = document.getElementById('datasetSize').value;
-            addDataToChart(dataset, time, mode);
+            addDataToChart(dataset, time, mode, sizeKB);
+            addMemoryData(dataset, memoryUsed, mode);
 
             renderTable(result.slice(0, 100));
         }
 
-        function addDataToChart(datasetSize, time, mode) {
+        function addDataToChart(datasetSize, time, mode, serverPayload = 0) {
 
-            // label toevoegen als die nog niet bestaat
-            if (!chart.data.labels.includes(datasetSize)) {
-                chart.data.labels.push(datasetSize);
+            const map = {
+                small: "1k",
+                medium: "10k",
+                large: "100k",
+                xlarge: "1M"
+            };
+
+            const label = map[datasetSize];
+
+            if (!chart.data.labels.includes(label)) {
+                chart.data.labels.push(label);
+                payloadChart.data.labels.push(label);
             }
 
-            const index = chart.data.labels.indexOf(datasetSize);
+            const index = chart.data.labels.indexOf(label);
 
+            // PERFORMANCE
             if (mode === "client") {
                 chart.data.datasets[0].data[index] = time;
             } else {
                 chart.data.datasets[1].data[index] = time;
             }
 
+            // PAYLOAD
+            if (mode === "client") {
+                payloadChart.data.datasets[0].data[index] = clientPayloadKB;
+            } else {
+                payloadChart.data.datasets[1].data[index] = serverPayload;
+            }
+
             chart.update();
+            payloadChart.update();
+        }
+
+        function addMemoryData(datasetSize, memory, mode) {
+
+            const map = {
+                small: "1k",
+                medium: "10k",
+                large: "100k",
+                xlarge: "1M"
+            };
+
+            const label = map[datasetSize];
+
+            if (!memoryChart.data.labels.includes(label)) {
+                memoryChart.data.labels.push(label);
+            }
+
+            const index = memoryChart.data.labels.indexOf(label);
+
+            if (mode === "client") {
+                memoryChart.data.datasets[0].data[index] = memory;
+            } else {
+                memoryChart.data.datasets[1].data[index] = memory;
+            }
+
+            memoryChart.update();
         }
 
         function initChart() {
-            const ctx = document.getElementById("performanceChart");
 
-            chart = new Chart(ctx, {
+            // Performance chart
+            const ctx1 = document.getElementById("performanceChart");
+
+            chart = new Chart(ctx1, {
                 type: "line",
                 data: {
                     labels: [],
                     datasets: [
                         {
-                            label: "Client-side",
-                            data: [],
-                            tension: 0.3,
+                            label: 'Client-side time (ms)',
+                            data: []
                         },
                         {
-                            label: "Server-side",
-                            data: [],
-                            tension: 0.3,
-                        },
-                    ],
+                            label: 'Server-side time (ms)',
+                            data: []
+                        }
+                    ]
                 },
                 options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            display: true,
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: "Time (milliseconds)"
+                            }
                         },
-                    },
+                        x: {
+                            title: {
+                                display: true,
+                                text: "Dataset size"
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Payload chart
+            const ctx2 = document.getElementById("payloadChart");
+
+            payloadChart = new Chart(ctx2, {
+                type: "line",
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Client payload (KB)',
+                            data: []
+                        },
+                        {
+                            label: 'Server payload (KB)',
+                            data: []
+                        }
+                    ]
                 },
+                options: {
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: "Payload size (KB)"
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: "Dataset size"
+                            }
+                        }
+                    }
+                }
             });
         }
 
         function renderTable(data) {
-            const tbody = document.querySelector('#dataTable tbody');
+            const tbody = document.getElementById("resultsTable");;
 
             let html = '';
 
