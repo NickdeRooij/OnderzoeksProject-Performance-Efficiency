@@ -28,7 +28,8 @@ var datasets = new Dictionary<string, List<Track>>
     { "small", datasetService.GenerateDataset(1_000) },
     { "medium", datasetService.GenerateDataset(10_000) },
     { "large", datasetService.GenerateDataset(100_000) },
-    { "xlarge", datasetService.GenerateDataset(1_000_000) }
+    { "xlarge", datasetService.GenerateDataset(1_000_000) },
+    { "xxlarge", datasetService.GenerateDataset(5_000_000) }
 };
 
 // ====================
@@ -50,15 +51,13 @@ app.MapGet("/dataset/server/{size}", (string size, string? artist, string? genre
     if (!datasets.ContainsKey(size.ToLower()))
         return Results.NotFound("Dataset niet gevonden");
 
-    var query = datasets[size.ToLower()].AsQueryable();
+    IEnumerable<Track> query = datasets[size.ToLower()];
 
     if (!string.IsNullOrEmpty(artist))
-        query = query.Where(t =>
-        t.Artist.Contains(artist, StringComparison.OrdinalIgnoreCase));
+        query = query.Where(t => t.Artist.Contains(artist, StringComparison.OrdinalIgnoreCase));
 
     if (!string.IsNullOrEmpty(genre))
-        query = query.Where(t =>
-            t.Genre.Contains(genre, StringComparison.OrdinalIgnoreCase));
+        query = query.Where(t => t.Genre.Contains(genre, StringComparison.OrdinalIgnoreCase));
 
     if (minBPM.HasValue)
         query = query.Where(t => t.BPM >= minBPM.Value);

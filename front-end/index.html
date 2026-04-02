@@ -42,6 +42,7 @@
                     <option value="medium">10.000</option>
                     <option value="large">100.000</option>
                     <option value="xlarge">1.000.000</option>
+                    <option value="xxlarge">5.000.000</option>
                 </select>
             </div>
 
@@ -56,12 +57,12 @@
             </div>
 
             <div class="col-md-2">
-                <label class="form-label">Min BPM</label>
+                <label class="form-label">Min Beats Per Minute</label>
                 <input class="form-control" type="number" id="minBPM">
             </div>
 
             <div class="col-md-2">
-                <label class="form-label">Max BPM</label>
+                <label class="form-label">Max Beats Per Minute</label>
                 <input class="form-control" type="number" id="maxBPM">
             </div>
 
@@ -69,15 +70,15 @@
                 <button class="btn btn-success w-100" onclick="filter()">Filter</button>
             </div>
 
-            <button class="btn btn-warning w-100 mt-2" onclick="runBenchmark(10)">
-                Benchmark (10 runs)
+            <button class="btn btn-danger w-100 mt-2" onclick="runFullBenchmark()">
+                Full Benchmark (Client + Server)
             </button>
 
             <p>Filtering time: <span id="time">0</span> ms</p>
         </div>
         <!-- <p>Showing first 100 results</p> -->
         <button class="btn btn-secondary mb-3" data-bs-toggle="collapse" data-bs-target="#datasetTable">
-            Toon / Verberg Dataset
+            Show / Hide Top 100 Results
         </button>
         <div id="datasetTable" class="collapse show">
 
@@ -121,6 +122,34 @@
                 <canvas id="memoryChart"></canvas>
             </div>
         </div>
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+
+                <h5 class="card-title">Benchmark Results</h5>
+
+                <div class="alert alert-info mb-2" id="benchmarkFilters"></div>
+
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>Dataset</th>
+                            <th>Results</th>
+                            <th>Client Time (ms)</th>
+                            <th>Server Time (ms)</th>
+                            <th>Client Payload (KB)</th>
+                            <th>Server Payload (KB)</th>
+                            <th>Client Memory (MB)</th>
+                            <th>Server Memory (MB)</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="benchmarkTable"></tbody>
+
+                </table>
+
+            </div>
+        </div>
     </div>
     </div>
 
@@ -129,6 +158,8 @@
         let mode = "client";
         let chart;
         let payloadChart;
+        let benchmarkMode = false;
+        let benchmarkResults = {};
 
         let memoryChart = new Chart(document.getElementById('memoryChart'), {
             type: 'line',
@@ -226,38 +257,7 @@
             console.log("---- DATASET LOAD END ----");
         }
 
-        async function runBenchmark(runs = 10) {
-
-            console.log("===== BENCHMARK START =====");
-
-            const results = [];
-
-            for (let i = 0; i < runs; i++) {
-
-                const start = performance.now();
-
-                await filter(); // je bestaande filter functie
-
-                const end = performance.now();
-
-                const time = end - start;
-
-                results.push(time);
-
-                console.log(`Run ${i + 1}: ${time.toFixed(2)} ms`);
-            }
-
-            const avg = results.reduce((a, b) => a + b) / results.length;
-
-            console.log("===== BENCHMARK RESULT =====");
-            console.log("Runs:", runs);
-            console.log("Average:", avg.toFixed(2), "ms");
-
-        }
-
         async function filter() {
-
-            const start = performance.now();
 
             const size = document.getElementById('datasetSize').value;
             const artist = document.getElementById('artist').value;
@@ -268,22 +268,18 @@
             console.log("---- FILTER START ----");
             console.log("Mode:", mode);
             console.log("Dataset:", size);
-            console.log("Filters:", {
-                artist,
-                genre,
-                minBPM,
-                maxBPM
-            });
 
             let result = [];
-            let clientPayloadKB = 0;
-            let payload = 0;
             let sizeKB = 0;
-            let memoryUsed = 0;
 
+            // MEMORY BEFORE
+            let memoryBefore = 0;
             if (performance.memory) {
-                memoryUsed = performance.memory.usedJSHeapSize / 1024 / 1024;
+                memoryBefore = performance.memory.usedJSHeapSize;
             }
+
+            // TIMER START
+            const start = performance.now();
 
             if (mode === "server") {
 
@@ -305,6 +301,8 @@
 
             } else {
 
+                sizeKB = clientPayloadKB;
+
                 result = clientDataset.filter(track =>
                     (!artist || track.artist.toLowerCase().includes(artist.toLowerCase())) &&
                     (!genre || track.genre.toLowerCase().includes(genre.toLowerCase())) &&
@@ -314,28 +312,55 @@
 
             }
 
+            // TIMER END
             const end = performance.now();
-            const time = (end - start);
+            const time = end - start;
 
-            console.log("Resultaten gevonden:", result.length);
+            // MEMORY AFTER
+            let memoryAfter = 0;
+            let memoryUsed = 0;
+
+            if (performance.memory) {
+                memoryAfter = performance.memory.usedJSHeapSize;
+                memoryUsed = (memoryAfter - memoryBefore) / 1024 / 1024;
+            }
+
+            console.log("Results:", result.length);
             console.log("Filtering time:", time.toFixed(2), "ms");
+            console.log("Memory used:", memoryUsed.toFixed(2), "MB");
+
             console.log("---- FILTER END ----");
 
             document.getElementById("time").textContent = time.toFixed(2);
-            const dataset = document.getElementById('datasetSize').value;
-            addDataToChart(dataset, time, mode, sizeKB);
-            addMemoryData(dataset, memoryUsed, mode);
 
-            renderTable(result.slice(0, 100));
+            const dataset = document.getElementById('datasetSize').value;
+
+            if (!benchmarkMode) {
+                addDataToChart(dataset, time, mode, sizeKB, memoryUsed);
+                addMemoryData(dataset, memoryUsed, mode);
+            }
+
+            if (!benchmarkMode) {
+                renderTable(result.slice(0, 100));
+            }
+
+            return {
+                time,
+                sizeKB,
+                memoryUsed,
+                results: result.length,
+                data: result
+            };
         }
 
-        function addDataToChart(datasetSize, time, mode, serverPayload = 0) {
+        function addDataToChart(datasetSize, time, mode, payloadKB, memoryMB) {
 
             const map = {
                 small: "1k",
                 medium: "10k",
                 large: "100k",
-                xlarge: "1M"
+                xlarge: "1M",
+                xxlarge: "5M"
             };
 
             const label = map[datasetSize];
@@ -356,13 +381,21 @@
 
             // PAYLOAD
             if (mode === "client") {
-                payloadChart.data.datasets[0].data[index] = clientPayloadKB;
+                payloadChart.data.datasets[0].data[index] = payloadKB;
             } else {
-                payloadChart.data.datasets[1].data[index] = serverPayload;
+                payloadChart.data.datasets[1].data[index] = payloadKB;
+            }
+
+            // MEMORY
+            if (mode === "client") {
+                memoryChart.data.datasets[0].data[index] = memoryMB;
+            } else {
+                memoryChart.data.datasets[1].data[index] = memoryMB;
             }
 
             chart.update();
             payloadChart.update();
+            memoryChart.update();
         }
 
         function addMemoryData(datasetSize, memory, mode) {
@@ -371,7 +404,8 @@
                 small: "1k",
                 medium: "10k",
                 large: "100k",
-                xlarge: "1M"
+                xlarge: "1M",
+                xxlarge: "5M"
             };
 
             const label = map[datasetSize];
@@ -403,21 +437,27 @@
                     datasets: [
                         {
                             label: 'Client-side time (ms)',
-                            data: []
+                            data: [],
+                            borderColor: 'blue',
+                            tension: 0.1
                         },
                         {
                             label: 'Server-side time (ms)',
-                            data: []
+                            data: [],
+                            borderColor: 'red',
+                            tension: 0.1
                         }
                     ]
                 },
                 options: {
                     scales: {
                         y: {
+                            type: 'logarithmic',  // hier zet je logaritme
                             title: {
                                 display: true,
                                 text: "Time (milliseconds)"
-                            }
+                            },
+                            min: 0.05 // niet nul, anders werkt log niet
                         },
                         x: {
                             title: {
@@ -439,21 +479,27 @@
                     datasets: [
                         {
                             label: 'Client payload (KB)',
-                            data: []
+                            data: [],
+                            borderColor: 'green',
+                            tension: 0.05
                         },
                         {
                             label: 'Server payload (KB)',
-                            data: []
+                            data: [],
+                            borderColor: 'orange',
+                            tension: 0.1
                         }
                     ]
                 },
                 options: {
                     scales: {
                         y: {
+                            type: 'logarithmic', // logaritmische schaal
                             title: {
                                 display: true,
                                 text: "Payload size (KB)"
-                            }
+                            },
+                            min: 0.1 // niet nul
                         },
                         x: {
                             title: {
@@ -492,6 +538,206 @@
             initChart();
             loadData();
         };
+
+        function renderBenchmarkTable() {
+
+            const tbody = document.getElementById("benchmarkTable");
+
+            const map = {
+                small: "1k",
+                medium: "10k",
+                large: "100k",
+                xlarge: "1M",
+                xxlarge: "5M"
+            };
+
+            let html = "";
+
+            for (const size in benchmarkResults) {
+
+                const data = benchmarkResults[size];
+
+                html += `
+        <tr>
+            <td>${map[size]}</td>
+            <td>${data.client?.results ?? data.server?.results}</td>
+            <td>${data.client?.time.toFixed(2)}</td>
+            <td>${data.server?.time.toFixed(2)}</td>
+            <td>${data.client?.payload.toFixed(2)}</td>
+            <td>${data.server?.payload.toFixed(2)}</td>
+            <td>${data.client?.memory.toFixed(2)}</td>
+            <td>${data.server?.memory.toFixed(2)}</td>
+        </tr>
+        `;
+            }
+
+            tbody.innerHTML = html;
+        }
+
+        async function runFullBenchmark() {
+
+            benchmarkMode = true;
+
+            const datasets = ["small", "medium", "large", "xlarge", "xxlarge"];
+            const runs = 5;
+
+            console.log("===== FULL BENCHMARK START =====");
+
+            updateBenchmarkFilters();
+
+            let lastResultData = null;
+
+            // CLIENT TEST
+            mode = "client";
+
+            for (const size of datasets) {
+
+                document.getElementById("datasetSize").value = size;
+
+                await loadData();
+
+                let times = [];
+                let payloads = [];
+                let memories = [];
+                let resultCount = 0;
+
+                // warmup
+                for (let i = 0; i < 3; i++) {
+                    await filter();
+                }
+
+                for (let i = 0; i < runs; i++) {
+
+                    const start = performance.now();
+
+                    const result = await filter();
+
+                    resultCount = result.results;
+
+                    times.push(result.time);
+                    payloads.push(result.sizeKB);
+
+                    if (performance.memory) {
+                        memories.push(performance.memory.usedJSHeapSize / 1024 / 1024);
+                    }
+
+                    // Sla resultaten van xxlarge op
+                    if (size === "xxlarge" && i === runs - 1) {
+                        lastResultData = result;
+                        data: result.data.slice(0, 100)
+                    }
+
+                    await new Promise(r => setTimeout(r, 100));
+                }
+
+                times.sort((a, b) => a - b);
+
+                times.shift(); // remove lowest
+                times.pop();   // remove highest
+
+                const avgTime = times.reduce((a, b) => a + b) / times.length;
+                const avgPayload = payloads.reduce((a, b) => a + b) / runs;
+                const avgMemory = memories.reduce((a, b) => a + b) / memories.length;
+
+                console.log("Client avg", size, avgTime.toFixed(2), "ms");
+
+                addDataToChart(size, avgTime, "client", avgPayload, avgMemory);
+                addMemoryData(size, avgMemory, "client");
+
+                benchmarkResults[size] ??= {};
+                benchmarkResults[size].client = {
+                    time: avgTime,
+                    payload: avgPayload,
+                    memory: avgMemory,
+                    results: resultCount
+                };
+            }
+
+            // SERVER TEST
+            mode = "server";
+
+            for (const size of datasets) {
+
+                document.getElementById("datasetSize").value = size;
+
+                let times = [];
+                let payloads = [];
+                let memories = [];
+                let resultCount = 0;
+
+                // warmup
+                for (let i = 0; i < 3; i++) {
+                    await filter();
+                }
+
+                for (let i = 0; i < runs; i++) {
+
+                    const start = performance.now();
+
+                    const result = await filter();
+
+                    resultCount = result.results;
+
+                    const end = performance.now();
+
+                    times.push(end - start);
+                    payloads.push(result.sizeKB);
+
+                    if (performance.memory) {
+                        memories.push(performance.memory.usedJSHeapSize / 1024 / 1024);
+                    }
+
+                    // Sla resultaten van xxlarge op
+                    if (size === "xxlarge" && i === runs - 1) {
+                        lastResultData = result;
+                        data: result.data.slice(0, 100)
+                    }
+
+                    await new Promise(r => setTimeout(r, 100));
+                }
+
+                times.sort((a, b) => a - b);
+
+                times.shift(); // remove lowest
+                times.pop();   // remove highest
+
+                const avgTime = times.reduce((a, b) => a + b) / times.length;
+                const avgPayload = payloads.reduce((a, b) => a + b) / runs;
+                const avgMemory = memories.reduce((a, b) => a + b) / memories.length;
+
+                addDataToChart(size, avgTime, "server", avgPayload, avgMemory);
+                addMemoryData(size, avgMemory, "server");
+
+                benchmarkResults[size] ??= {};
+                benchmarkResults[size].server = {
+                    time: avgTime,
+                    payload: avgPayload,
+                    memory: avgMemory,
+                    results: resultCount
+                };
+            }
+
+            benchmarkMode = false;
+
+            renderBenchmarkTable();
+
+            console.log("===== FULL BENCHMARK DONE =====");
+
+            if (lastResultData) {
+                renderTable(lastResultData.data.slice(0, 100));
+            }
+        }
+
+        function updateBenchmarkFilters() {
+
+            const artist = document.getElementById("artist").value || "-";
+            const genre = document.getElementById("genre").value || "-";
+            const minBPM = document.getElementById("minBPM").value || "-";
+            const maxBPM = document.getElementById("maxBPM").value || "-";
+
+            document.getElementById("benchmarkFilters").textContent =
+                `Filters → Artist: ${artist} | Genre: ${genre} | BPM: ${minBPM} - ${maxBPM}`;
+        }
 
     </script>
 </body>
